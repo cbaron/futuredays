@@ -1,44 +1,53 @@
-var server = require('../lib/node-router').getServer();
+var http = require('http');
 
-server.get( "/", function( request, response ) {
+var handler = function( request, response ) {
 
-    var myPg = require('lib/myPg').object
+    var url = require('url'),
+        _ = require('../node_modules/underscore'),
+        collectionJson = require('./lib/collectionJson').collectionJson,
+        urlData = url.parse( request.url ),
+        responseHeaders = {
+            'Content-Type': 'application/json',
+            'Content-Length': undefined,
+            'Cache-Control': "no-cache, no-store, must-revalidate",
+            'Connection': "Close",
+            'Date': new Date().toISOString()
+        };
 
-    myPg.connect(
+    console.log( request.headers.accept );
 
-    /*
-    var pg = require('pg'),
-        conString = "postgres://cbaron:cbaron@localhost/futuredays",
-        query = [ "SELECT table_name ",
-                  "FROM information_schema.tables ",
-                  "WHERE table_schema='public' ",
-                    "AND table_type='BASE TABLE';" ].join("");
+    if( request.headers.accept.indexOf('application/xhtml+xml') != -1 ) {
 
-    pg.connect(conString, function(err, client, done) {
+    } else if( urlData.pathname === '/' ) {
 
-      if(err) {
-        return console.error('error fetching client from pool', err);
-      }
+        var myPg = require('./lib/myPg').dal;
+            query = [ "SELECT table_name ",
+                      "FROM information_schema.tables ",
+                      "WHERE table_schema='public' ",
+                        "AND table_type='BASE TABLE';" ].join("")
 
-      client.query( query, [ ], function( err, result ) {
-        //call `done()` to release the client back to the pool
-        done();
+        myPg.connect()
+            .eventEmitter.on( 'dbConnected', function() {
+                myPg.query( query, [ ] )
+                    .eventEmitter.on( 'dbSuccessfulQuery', function() {
 
-        if(err) {
-          return console.error('error running query', err);
-        }
+                        var cJ = new collectionJson();
 
-        console.log(result);
+                        cJ.setItems( _.map( myPg.result.rows, function( row ) {
+                            return {
+                                href: url.href + row.table_name,
+                                data: [ { value: row.table_name + 's' } ]
+                            }
+                        } ) );
+                        
 
-      } );
+                        var responseBody = JSON.stringify( myPg.result );
+                        responseHeaders['Content-Length'] = Buffer.byteLength( responseBody );
+                        response.writeHead( 200, responseHeaders);
+                        response.end( responseBody );               
+                    } );
+            } );
+    }
+}
 
-    } );
-    */
-
-} );
-
-server.get( "/transactions", function( request, response ) {
-    return { sup: "son" }
-} );
-
-server.listen(8000, "localhost");
+http.createServer(handler).listen(8000);
